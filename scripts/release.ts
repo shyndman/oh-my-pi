@@ -16,7 +16,7 @@
  * 7. Watch CI
  */
 
-import { Glob } from "bun";
+import { $, Glob } from "bun";
 
 const VERSION = process.argv[2];
 
@@ -24,29 +24,6 @@ if (!VERSION || !/^\d+\.\d+\.\d+/.test(VERSION)) {
 	console.error("Usage: bun scripts/release.ts <version>");
 	console.error("Example: bun scripts/release.ts 3.10.0");
 	process.exit(1);
-}
-
-interface RunOptions {
-	silent?: boolean;
-	capture?: boolean;
-	ignoreError?: boolean;
-}
-
-function run(cmd: string[], options: RunOptions = {}): string {
-	const cmdStr = cmd.join(" ");
-	if (!options.silent) console.log(`$ ${cmdStr}`);
-
-	const result = Bun.spawnSync(cmd, {
-		stdout: options.capture ? "pipe" : "inherit",
-		stderr: "inherit",
-	});
-
-	if (result.exitCode !== 0 && !options.ignoreError) {
-		console.error(`Command failed: ${cmdStr}`);
-		process.exit(1);
-	}
-
-	return result.stdout?.toString().trim() ?? "";
 }
 
 const changelogGlob = new Glob("packages/*/CHANGELOG.md");
@@ -81,15 +58,15 @@ console.log("\n=== Release Script ===\n");
 // 1. Pre-flight checks
 console.log("Pre-flight checks...");
 
-const branch = run(["git", "branch", "--show-current"], { capture: true, silent: true });
-if (branch !== "main") {
-	console.error(`Error: Must be on main branch (currently on '${branch}')`);
+const branch = await $`git branch --show-current`.text();
+if (branch.trim() !== "main") {
+	console.error(`Error: Must be on main branch (currently on '${branch.trim()}')`);
 	process.exit(1);
 }
 console.log("  On main branch");
 
-const status = run(["git", "status", "--porcelain"], { capture: true, silent: true });
-if (status) {
+const status = await $`git status --porcelain`.text();
+if (status.trim()) {
 	console.error("Error: Uncommitted changes detected. Commit or stash first.");
 	console.error(status);
 	process.exit(1);
@@ -99,7 +76,7 @@ console.log("  Working directory clean\n");
 // 2. Update package versions
 console.log(`Updating package versions to ${VERSION}...`);
 const pkgJsonPaths = await Array.fromAsync(packageJsonGlob.scan("."));
-run(["sd", '"version": "[^"]+"', `"version": "${VERSION}"`, ...pkgJsonPaths]);
+await $`sd '"version": "[^"]+"' ${`"version": "${VERSION}"`} ${pkgJsonPaths}`;
 
 // Verify
 console.log("  Verifying versions:");
@@ -111,8 +88,8 @@ console.log();
 
 // 3. Regenerate lockfile
 console.log("Regenerating lockfile...");
-run(["rm", "-f", "bun.lock"]);
-run(["bun", "install"]);
+await $`rm -f bun.lock`;
+await $`bun install`;
 console.log();
 
 // 4. Update changelogs
@@ -122,29 +99,26 @@ console.log();
 
 // 5. Commit and tag
 console.log("Committing and tagging...");
-run(["git", "add", "."]);
-run(["git", "commit", "-m", `chore: bump version to ${VERSION}`]);
-run(["git", "tag", `v${VERSION}`]);
+await $`git add .`;
+await $`git commit -m ${`chore: bump version to ${VERSION}`}`;
+await $`git tag ${`v${VERSION}`}`;
 console.log();
 
 // 6. Push
 console.log("Pushing to remote...");
-run(["git", "push", "origin", "main"]);
-run(["git", "push", "origin", `v${VERSION}`]);
+await $`git push origin main`;
+await $`git push origin ${`v${VERSION}`}`;
 console.log();
 
 // 7. Watch CI - wait for all workflow runs on current commit
 console.log("Watching CI...");
-const commitSha = run(["git", "rev-parse", "HEAD"], { capture: true, silent: true });
+const commitSha = (await $`git rev-parse HEAD`.text()).trim();
 console.log(`  Commit: ${commitSha.slice(0, 8)}`);
 
 // Poll until all runs complete
 let allPassed = false;
 while (!allPassed) {
-	const runsOutput = run(
-		["gh", "run", "list", "--commit", commitSha, "--json", "databaseId,status,conclusion,name"],
-		{ capture: true, silent: true },
-	);
+	const runsOutput = await $`gh run list --commit ${commitSha} --json databaseId,status,conclusion,name`.text();
 	const runs: Array<{ databaseId: number; status: string; conclusion: string | null; name: string }> =
 		JSON.parse(runsOutput);
 
