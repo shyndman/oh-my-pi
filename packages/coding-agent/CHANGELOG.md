@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added `getUsageStatistics()` method to SessionManager for tracking cumulative token usage and costs across session messages
+
+### Changed
+
+- Changed status line to display usage statistics more efficiently by using centralized session statistics instead of recalculating from entries
 
 ## [3.13.1337] - 2026-01-04
 

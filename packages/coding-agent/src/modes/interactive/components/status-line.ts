@@ -17,13 +17,14 @@ const THINKING_ICONS: Record<string, string> = {
 
 // Nerd Font icons
 const ICONS = {
-	model: "\uf4bc", //  robot/model
-	folder: "\uf115", //  folder
+	model: "\uec19", //  robot/model
+	folder: "\uf115 ", //  folder
 	branch: "\ue725", //  git branch
 	sep: "\ue0b1", //  powerline thin chevron
 	tokens: "\ue26b", //  coins
 	context: "\ue70f", //  window
 	auto: "\udb80\udc68", //  auto
+	pi: "\ue22c", //  pi
 } as const;
 
 /** Create a colored text segment with background */
@@ -251,23 +252,6 @@ export class StatusLineComponent implements Component {
 	private buildStatusLine(): string {
 		const state = this.session.state;
 
-		// Calculate cumulative usage from ALL session entries
-		let totalInput = 0;
-		let totalOutput = 0;
-		let totalCacheRead = 0;
-		let totalCacheWrite = 0;
-		let totalCost = 0;
-
-		for (const entry of this.session.sessionManager.getEntries()) {
-			if (entry.type === "message" && entry.message.role === "assistant") {
-				totalInput += entry.message.usage.input;
-				totalOutput += entry.message.usage.output;
-				totalCacheRead += entry.message.usage.cacheRead;
-				totalCacheWrite += entry.message.usage.cacheWrite;
-				totalCost += entry.message.usage.cost.total;
-			}
-		}
-
 		// Get context percentage from last assistant message
 		const lastAssistantMessage = state.messages
 			.slice()
@@ -370,14 +354,15 @@ export class StatusLineComponent implements Component {
 		// ═══════════════════════════════════════════════════════════════════════
 		const spendParts: string[] = [];
 
-		const totalTokens = totalInput + totalOutput + totalCacheRead + totalCacheWrite;
+		const { input, output, cacheRead, cacheWrite, cost } = this.session.sessionManager.getUsageStatistics();
+		const totalTokens = input + output + cacheRead + cacheWrite;
 		if (totalTokens) {
 			spendParts.push(`${ICONS.tokens} ${formatTokens(totalTokens)}`);
 		}
 
 		const usingSubscription = state.model ? this.session.modelRegistry.isUsingOAuth(state.model) : false;
-		if (totalCost || usingSubscription) {
-			const costDisplay = `$${totalCost.toFixed(2)}${usingSubscription ? " (sub)" : ""}`;
+		if (cost || usingSubscription) {
+			const costDisplay = `$${cost.toFixed(2)}${usingSubscription ? " (sub)" : ""}`;
 			spendParts.push(costDisplay);
 		}
 
@@ -390,6 +375,10 @@ export class StatusLineComponent implements Component {
 		const sepAnsi = theme.getFgAnsi("statusLineSep");
 
 		let statusLine = "";
+
+		// Pi segment
+		statusLine += plSegment(`${ICONS.pi} `, theme.getFgAnsi("statusLineContext"), bgAnsi);
+		statusLine += plSep(sepAnsi, bgAnsi);
 
 		// Model segment
 		statusLine += plSegment(modelContent, theme.getFgAnsi("statusLineModel"), bgAnsi);

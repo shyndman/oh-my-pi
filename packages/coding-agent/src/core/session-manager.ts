@@ -192,6 +192,7 @@ export type ReadonlySessionManager = Pick<
 	| "getHeader"
 	| "getEntries"
 	| "getTree"
+	| "getUsageStatistics"
 >;
 
 /** Generate a unique short ID (8 hex chars, collision-checked) */
@@ -586,6 +587,14 @@ export function getRecentSessions(sessionDir: string, limit = 3): RecentSessionI
  * Use buildSessionContext() to get the resolved message list for the LLM, which
  * handles compaction summaries and follows the path from root to current leaf.
  */
+export interface UsageStatistics {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cost: number;
+}
+
 export class SessionManager {
 	private sessionId: string = "";
 	private sessionTitle: string | undefined;
@@ -598,6 +607,7 @@ export class SessionManager {
 	private byId: Map<string, SessionEntry> = new Map();
 	private labelsById: Map<string, string> = new Map();
 	private leafId: string | null = null;
+	private usageStatistics: UsageStatistics = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 
 	private constructor(cwd: string, sessionDir: string, sessionFile: string | undefined, persist: boolean) {
 		this.cwd = cwd;
@@ -649,6 +659,7 @@ export class SessionManager {
 		this.byId.clear();
 		this.leafId = null;
 		this.flushed = false;
+		this.usageStatistics = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 
 		// Only generate filename if persisting and not already set (e.g., via --session flag)
 		if (this.persist && !this.sessionFile) {
@@ -662,6 +673,7 @@ export class SessionManager {
 		this.byId.clear();
 		this.labelsById.clear();
 		this.leafId = null;
+		this.usageStatistics = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 		for (const entry of this.fileEntries) {
 			if (entry.type === "session") continue;
 			this.byId.set(entry.id, entry);
@@ -672,6 +684,14 @@ export class SessionManager {
 				} else {
 					this.labelsById.delete(entry.targetId);
 				}
+			}
+			if (entry.type === "message" && entry.message.role === "assistant") {
+				const usage = entry.message.usage;
+				this.usageStatistics.input += usage.input;
+				this.usageStatistics.output += usage.output;
+				this.usageStatistics.cacheRead += usage.cacheRead;
+				this.usageStatistics.cacheWrite += usage.cacheWrite;
+				this.usageStatistics.cost += usage.cost.total;
 			}
 		}
 	}
@@ -688,6 +708,11 @@ export class SessionManager {
 
 	getCwd(): string {
 		return this.cwd;
+	}
+
+	/** Get usage statistics across all assistant messages in the session. */
+	getUsageStatistics(): UsageStatistics {
+		return this.usageStatistics;
 	}
 
 	getSessionDir(): string {
@@ -755,6 +780,14 @@ export class SessionManager {
 		this.byId.set(entry.id, entry);
 		this.leafId = entry.id;
 		this._persist(entry);
+		if (entry.type === "message" && entry.message.role === "assistant") {
+			const usage = entry.message.usage;
+			this.usageStatistics.input += usage.input;
+			this.usageStatistics.output += usage.output;
+			this.usageStatistics.cacheRead += usage.cacheRead;
+			this.usageStatistics.cacheWrite += usage.cacheWrite;
+			this.usageStatistics.cost += usage.cost.total;
+		}
 	}
 
 	/** Append a message as child of current leaf, then advance leaf. Returns entry id.

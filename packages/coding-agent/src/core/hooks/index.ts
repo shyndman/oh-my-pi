@@ -13,4 +13,4 @@ export {
 export { execCommand, HookRunner, type HookErrorListener } from "./runner";
 export { wrapToolsWithHooks, wrapToolWithHooks } from "./tool-wrapper";
 export * from "./types";
-export type { ReadonlySessionManager } from "../session-manager";
+export type { UsageStatistics, ReadonlySessionManager } from "../session-manager";
