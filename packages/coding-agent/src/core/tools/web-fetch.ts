@@ -1492,9 +1492,24 @@ async function handleNpm(url: string, timeout: number): Promise<RenderResult | n
 
 		// Fetch from npm registry - use /latest endpoint for smaller response
 		const latestUrl = `https://registry.npmjs.org/${packageName}/latest`;
-		const result = await loadPage(latestUrl, { timeout });
+		const downloadsUrl = `https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(packageName)}`;
+
+		// Fetch package info and download stats in parallel
+		const [result, downloadsResult] = await Promise.all([
+			loadPage(latestUrl, { timeout }),
+			loadPage(downloadsUrl, { timeout: Math.min(timeout, 5) }),
+		]);
 
 		if (!result.ok) return null;
+
+		// Parse download stats
+		let weeklyDownloads: number | null = null;
+		if (downloadsResult.ok) {
+			try {
+				const dlData = JSON.parse(downloadsResult.content) as { downloads?: number };
+				weeklyDownloads = dlData.downloads ?? null;
+			} catch {}
+		}
 
 		let pkg: {
 			name: string;
@@ -1520,7 +1535,17 @@ async function handleNpm(url: string, timeout: number): Promise<RenderResult | n
 
 		md += `**Latest:** ${pkg.version || "unknown"}`;
 		if (pkg.license) md += ` · **License:** ${typeof pkg.license === "string" ? pkg.license : pkg.license}`;
-		md += "\n\n";
+		md += "\n";
+		if (weeklyDownloads !== null) {
+			const formatted =
+				weeklyDownloads >= 1_000_000
+					? `${(weeklyDownloads / 1_000_000).toFixed(1)}M`
+					: weeklyDownloads >= 1_000
+						? `${(weeklyDownloads / 1_000).toFixed(1)}K`
+						: String(weeklyDownloads);
+			md += `**Weekly Downloads:** ${formatted}\n`;
+		}
+		md += "\n";
 
 		if (pkg.homepage) md += `**Homepage:** ${pkg.homepage}\n`;
 		const repoUrl = typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url;
@@ -1549,6 +1574,122 @@ async function handleNpm(url: string, timeout: number): Promise<RenderResult | n
 			fetchedAt,
 			truncated: output.truncated,
 			notes: ["Fetched via npm registry"],
+		};
+	} catch {}
+
+	return null;
+}
+
+// =============================================================================
+// Crates.io Special Handling
+// =============================================================================
+
+/**
+ * Handle crates.io URLs via API
+ */
+async function handleCratesIo(url: string, timeout: number): Promise<RenderResult | null> {
+	try {
+		const parsed = new URL(url);
+		if (parsed.hostname !== "crates.io" && parsed.hostname !== "www.crates.io") return null;
+
+		// Extract crate name from /crates/name or /crates/name/version
+		const match = parsed.pathname.match(/^\/crates\/([^/]+)/);
+		if (!match) return null;
+
+		const crateName = decodeURIComponent(match[1]);
+		const fetchedAt = new Date().toISOString();
+
+		// Fetch from crates.io API
+		const apiUrl = `https://crates.io/api/v1/crates/${crateName}`;
+		const result = await loadPage(apiUrl, {
+			timeout,
+			headers: { "User-Agent": "omp-web-fetch/1.0 (https://github.com/anthropics)" },
+		});
+
+		if (!result.ok) return null;
+
+		let data: {
+			crate: {
+				name: string;
+				description: string | null;
+				downloads: number;
+				recent_downloads: number;
+				max_version: string;
+				repository: string | null;
+				homepage: string | null;
+				documentation: string | null;
+				categories: string[];
+				keywords: string[];
+				created_at: string;
+				updated_at: string;
+			};
+			versions: Array<{
+				num: string;
+				downloads: number;
+				created_at: string;
+				license: string | null;
+				rust_version: string | null;
+			}>;
+		};
+
+		try {
+			data = JSON.parse(result.content);
+		} catch {
+			return null;
+		}
+
+		const crate = data.crate;
+		const latestVersion = data.versions?.[0];
+
+		// Format download counts
+		const formatDownloads = (n: number): string =>
+			n >= 1_000_000
+				? `${(n / 1_000_000).toFixed(1)}M`
+				: n >= 1_000
+					? `${(n / 1_000).toFixed(1)}K`
+					: String(n);
+
+		let md = `# ${crate.name}\n\n`;
+		if (crate.description) md += `${crate.description}\n\n`;
+
+		md += `**Latest:** ${crate.max_version}`;
+		if (latestVersion?.license) md += ` · **License:** ${latestVersion.license}`;
+		if (latestVersion?.rust_version) md += ` · **MSRV:** ${latestVersion.rust_version}`;
+		md += "\n";
+		md += `**Downloads:** ${formatDownloads(crate.downloads)} total · ${formatDownloads(crate.recent_downloads)} recent\n\n`;
+
+		if (crate.repository) md += `**Repository:** ${crate.repository}\n`;
+		if (crate.homepage && crate.homepage !== crate.repository) md += `**Homepage:** ${crate.homepage}\n`;
+		if (crate.documentation) md += `**Docs:** ${crate.documentation}\n`;
+		if (crate.keywords?.length) md += `**Keywords:** ${crate.keywords.join(", ")}\n`;
+		if (crate.categories?.length) md += `**Categories:** ${crate.categories.join(", ")}\n`;
+
+		// Show recent versions
+		if (data.versions?.length > 0) {
+			md += `\n## Recent Versions\n\n`;
+			for (const ver of data.versions.slice(0, 5)) {
+				const date = ver.created_at.split("T")[0];
+				md += `- **${ver.num}** (${date}) - ${formatDownloads(ver.downloads)} downloads\n`;
+			}
+		}
+
+		// Try to fetch README from docs.rs or repository
+		const docsRsUrl = `https://docs.rs/crate/${crateName}/${crate.max_version}/source/README.md`;
+		const readmeResult = await loadPage(docsRsUrl, { timeout: Math.min(timeout, 5) });
+		if (readmeResult.ok && readmeResult.content.length > 100 && !looksLikeHtml(readmeResult.content)) {
+			md += `\n---\n\n## README\n\n${readmeResult.content}\n`;
+		}
+
+		const output = finalizeOutput(md);
+		return {
+			url,
+			finalUrl: url,
+			contentType: "text/markdown",
+			method: "crates.io",
+			content: output.content,
+			fetchedAt,
+			truncated: output.truncated,
+			notes: ["Fetched via crates.io API"],
 		};
 	} catch {}
 
@@ -1803,6 +1944,7 @@ async function handleSpecialUrls(url: string, timeout: number): Promise<RenderRe
 		(await handleWikipedia(url, timeout)) ||
 		(await handleReddit(url, timeout)) ||
 		(await handleNpm(url, timeout)) ||
+		(await handleCratesIo(url, timeout)) ||
 		(await handleArxiv(url, timeout)) ||
 		(await handleIacr(url, timeout))
 	);
@@ -2139,7 +2281,7 @@ export function createWebFetchTool(_cwd: string): AgentTool<typeof webFetchSchem
 - Use this tool when you need to retrieve and analyze web content
 
 Features:
-- Site-specific handlers for GitHub (issues, PRs, repos, gists), Stack Overflow, Wikipedia, Reddit, NPM, arXiv, IACR, and Twitter/X
+- Site-specific handlers for GitHub (issues, PRs, repos, gists), Stack Overflow, Wikipedia, Reddit, NPM, crates.io, arXiv, IACR, and Twitter/X
 - Automatic detection and use of LLM-friendly endpoints (llms.txt, .md suffixes)
 - Binary file conversion (PDF, DOCX, etc.) via markitdown if available
 - HTML to text rendering via lynx if available
