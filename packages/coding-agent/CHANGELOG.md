@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [3.35.0] - 2026-01-09
 ### Added
 
 - Added retry logic with exponential backoff for auto-compaction failures
