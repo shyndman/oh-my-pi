@@ -27,7 +27,9 @@ import { nanoid } from "nanoid";
 import { getAuthPath, getDebugLogPath } from "../../config";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session";
 import type { ExtensionUIContext } from "../../core/extensions/index";
+import { HistoryStorage } from "../../core/history-storage";
 import { KeybindingsManager } from "../../core/keybindings";
+import { logger } from "../../core/logger";
 import { type CustomMessage, createCompactionSummaryMessage } from "../../core/messages";
 import { getRecentSessions, type SessionContext, SessionManager } from "../../core/session-manager";
 import { loadSlashCommands } from "../../core/slash-commands";
@@ -51,6 +53,7 @@ import { CustomEditor } from "./components/custom-editor";
 import { CustomMessageComponent } from "./components/custom-message";
 import { DynamicBorder } from "./components/dynamic-border";
 import { ExtensionDashboard } from "./components/extensions";
+import { HistorySearchComponent } from "./components/history-search";
 import { HookEditorComponent } from "./components/hook-editor";
 import { HookInputComponent } from "./components/hook-input";
 import { HookSelectorComponent } from "./components/hook-selector";
@@ -170,6 +173,8 @@ export class InteractiveMode {
 	// Slash commands loaded from files (for compaction queue handling)
 	private fileSlashCommands = new Set<string>();
 
+	private historyStorage?: HistoryStorage;
+
 	// Voice mode state
 	private voiceSupervisor: VoiceSupervisor;
 	private voiceAutoModeEnabled = false;
@@ -223,6 +228,12 @@ export class InteractiveMode {
 		this.statusContainer = new Container();
 		this.editor = new CustomEditor(getEditorTheme());
 		this.editor.setUseTerminalCursor(true);
+		try {
+			this.historyStorage = HistoryStorage.open();
+			this.editor.setHistoryStorage(this.historyStorage);
+		} catch (error) {
+			logger.warn("History storage unavailable", { error: String(error) });
+		}
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor);
 		this.statusLine = new StatusLineComponent(session);
@@ -1047,6 +1058,7 @@ export class InteractiveMode {
 		// Global debug handler on TUI (works regardless of focus)
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.editor.onCtrlL = () => this.showModelSelector();
+		this.editor.onCtrlR = () => this.showHistorySearch();
 		this.editor.onCtrlO = () => this.toggleToolOutputExpansion();
 		this.editor.onCtrlT = () => this.toggleThinkingBlockVisibility();
 		this.editor.onCtrlG = () => this.openExternalEditor();
@@ -2500,6 +2512,27 @@ export class InteractiveMode {
 		});
 	}
 
+	private showHistorySearch(): void {
+		const historyStorage = this.historyStorage;
+		if (!historyStorage) return;
+
+		this.showSelector((done) => {
+			const component = new HistorySearchComponent(
+				historyStorage,
+				(prompt) => {
+					done();
+					this.editor.setText(prompt);
+					this.ui.requestRender();
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+			);
+			return { component, focus: component };
+		});
+	}
+
 	/**
 	 * Show the Extension Control Center dashboard.
 	 * Replaces /status with a unified view of all providers and extensions.
@@ -3261,6 +3294,7 @@ export class InteractiveMode {
 | \`Shift+Ctrl+P\` | Cycle role models (temporary) |
 | \`Ctrl+Y\` | Select model (temporary) |
 | \`Ctrl+L\` | Select model (set roles) |
+| \`Ctrl+R\` | Search prompt history |
 | \`Ctrl+O\` | Toggle tool output expansion |
 | \`Ctrl+T\` | Toggle thinking block visibility |
 | \`Ctrl+G\` | Edit message in external editor |

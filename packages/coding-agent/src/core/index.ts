@@ -25,6 +25,7 @@ export {
 	loadExtensionFromFactory,
 	type ToolDefinition,
 } from "./extensions/index";
+export { HistoryStorage } from "./history-storage";
 export {
 	createMCPManager,
 	discoverAndLoadMCPTools,

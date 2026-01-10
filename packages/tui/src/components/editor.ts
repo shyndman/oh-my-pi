@@ -240,6 +240,15 @@ export interface EditorTopBorder {
 	width: number;
 }
 
+interface HistoryEntry {
+	prompt: string;
+}
+
+interface HistoryStorage {
+	add(prompt: string, cwd?: string): void;
+	getRecent(limit: number): HistoryEntry[];
+}
+
 export class Editor implements Component {
 	private state: EditorState = {
 		lines: [""],
@@ -273,6 +282,7 @@ export class Editor implements Component {
 	// Prompt history for up/down navigation
 	private history: string[] = [];
 	private historyIndex: number = -1; // -1 = not browsing, 0 = most recent, 1 = older, etc.
+	private historyStorage?: HistoryStorage;
 
 	public onSubmit?: (text: string) => void;
 	public onAltEnter?: (text: string) => void;
@@ -306,6 +316,13 @@ export class Editor implements Component {
 		this.useTerminalCursor = useTerminalCursor;
 	}
 
+	setHistoryStorage(storage: HistoryStorage): void {
+		this.historyStorage = storage;
+		const recent = storage.getRecent(100);
+		this.history = recent.map((entry) => entry.prompt);
+		this.historyIndex = -1;
+	}
+
 	/**
 	 * Add a prompt to history for up/down arrow navigation.
 	 * Called after successful submission.
@@ -320,6 +337,8 @@ export class Editor implements Component {
 		if (this.history.length > 100) {
 			this.history.pop();
 		}
+
+		this.historyStorage?.add(trimmed, process.cwd());
 	}
 
 	private isEditorEmpty(): boolean {

@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+
+- Added persistent prompt history with SQLite-backed storage and Ctrl+R search
+
 ### Fixed
 
 - Fixed credential blocking logic to correctly check for remaining available credentials instead of always returning true

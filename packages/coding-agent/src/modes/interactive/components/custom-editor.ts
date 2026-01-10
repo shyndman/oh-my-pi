@@ -29,6 +29,7 @@ export class CustomEditor extends Editor {
 	public onCtrlP?: () => void;
 	public onShiftCtrlP?: () => void;
 	public onCtrlL?: () => void;
+	public onCtrlR?: () => void;
 	public onCtrlO?: () => void;
 	public onCtrlT?: () => void;
 	public onCtrlG?: () => void;
@@ -110,6 +111,12 @@ export class CustomEditor extends Editor {
 		// Intercept Ctrl+L for model selector
 		if (isCtrlL(data) && this.onCtrlL) {
 			this.onCtrlL();
+			return;
+		}
+
+		// Intercept Ctrl+R for history search
+		if (matchesKey(data, "ctrl+r") && this.onCtrlR) {
+			this.onCtrlR();
 			return;
 		}
 
