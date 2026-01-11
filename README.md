@@ -210,11 +210,69 @@ Full Model Context Protocol support with external tool integration:
   <img src="https://github.com/can1357/oh-my-pi/blob/main/assets/arxiv.webp?raw=true" alt="arxiv">
 </p>
 
-Multi-provider search and full-page scraping:
+Multi-provider search and full-page scraping with 80+ specialized scrapers:
 
-- Anthropic, Perplexity, and Exa search integration with caching
+- **Multi-provider search**: Anthropic, Perplexity, and Exa with automatic fallback chain
+- **80+ site-specific scrapers**: GitHub, GitLab, npm, PyPI, crates.io, arXiv, PubMed, Stack Overflow, Hacker News, Reddit, Wikipedia, YouTube transcripts, and many more
+- **Package registries**: npm, PyPI, crates.io, Hex, Hackage, NuGet, Maven, RubyGems, Packagist, pub.dev, Go packages
+- **Security databases**: NVD, OSV, CISA KEV vulnerability data
 - HTML-to-markdown conversion with link preservation
-- JavaScript rendering support, image handling
+
+## + SSH Tool
+
+Remote command execution with persistent connections:
+
+- **Project discovery**: Reads SSH hosts from `ssh.json` / `.ssh.json` in your project
+- **Persistent connections**: Reuses SSH connections across commands for faster execution
+- **OS/shell detection**: Automatically detects remote OS and shell type
+- **SSHFS mounts**: Optional automatic mounting of remote directories
+- **Compat mode**: Windows host support with automatic shell probing
+
+## + Cursor Provider
+
+Use your Cursor Pro subscription for AI completions:
+
+- **Browser-based OAuth**: Authenticate through Cursor's OAuth flow
+- **Tool execution bridge**: Maps Cursor's native tools to omp equivalents (read, write, shell, diagnostics)
+- **Conversation caching**: Persists context across requests in the same session
+- **Shell streaming**: Real-time stdout/stderr during command execution
+
+## + Multi-Credential Support
+
+Distribute load across multiple API keys:
+
+- **Round-robin distribution**: Automatically cycles through credentials per session
+- **Usage-aware selection**: For OpenAI Codex, checks account limits before credential selection
+- **Automatic fallback**: Switches credentials mid-session when rate limits are hit
+- **Consistent hashing**: FNV-1a hashing ensures stable credential assignment per session
+
+## + Image Generation
+
+Create images directly from the agent:
+
+- **Gemini integration**: Uses `gemini-3-pro-image-preview` by default
+- **OpenRouter fallback**: Automatically uses OpenRouter when `OPENROUTER_API_KEY` is set
+- **Inline display**: Images render in terminals supporting Kitty/iTerm2 graphics
+- Saves to temp files and reports paths for further manipulation
+
+## + Voice Mode (Experimental)
+
+Real-time voice interaction using OpenAI Realtime API:
+
+- **Continuous streaming**: Mic input with semantic VAD turn detection
+- **Interruptible**: Speak over the assistant to redirect mid-response
+- **Echo suppression**: Filters out speaker playback during listening
+- **Progress updates**: Speaks partial results during long-running tasks
+- Toggle with `Ctrl+Y`, auto-sends on silence
+
+## + Worktree Management (Experimental)
+
+Git worktree operations with `/wt` command:
+
+- **Create/list/remove**: Manage worktrees directly from the agent
+- **Parallel operations**: Run commands across multiple worktrees simultaneously
+- **Collapse strategies**: Merge changes between worktrees (simple, merge-base, rebase)
+- **Session tracking**: Manages agent tasks across isolated worktrees
 
 ## + TUI Overhaul
 
@@ -225,6 +283,7 @@ Modern terminal interface with smart session management:
 - **Powerline footer**: Model, cwd, git branch/status, token usage, context %
 - **LSP status**: Shows which language servers are active and ready
 - **Hotkeys**: `?` displays shortcuts when editor empty
+- **Persistent prompt history**: SQLite-backed with `Ctrl+R` search across sessions
 - **Emergency terminal restore**: Crash handlers prevent terminal corruption
 
 ## + Edit Fuzzy Matching
@@ -237,12 +296,15 @@ Handles whitespace and indentation variance automatically:
 
 ## ... and many more
 
+- **Background mode**: `/background` detaches UI and continues agent execution
+- **Completion notifications**: Configurable bell/OSC99/OSC9 when agent finishes
+- **Structured git tool**: Safety guards, caching, GitHub operations with typed output
+- **65+ built-in themes**: Catppuccin, Dracula, Nord, Gruvbox, Tokyo Night, and material variants
+- **Auto environment detection**: OS, distro, kernel, CPU, GPU, shell, terminal, DE in system prompt
 - **Git context**: System prompt includes branch, status, recent commits
 - **Bun runtime**: Native TypeScript execution, faster startup, all packages migrated
 - **Centralized file logging**: Debug logs with daily rotation to `~/.omp/logs/`
-- **Clipboard export**: `/export --copy` copies session as formatted text
 - **Bash interceptor**: Optionally block shell commands that have dedicated tools
-- **Hidden tools**: Custom tools can be excluded from default list unless explicitly requested
 - **@file auto-read**: Type `@path/to/file` in prompts to inject file contents inline
 - **Additional tools**: AST (structural code analysis), Replace (find & replace across files)
 
@@ -250,12 +312,13 @@ Handles whitespace and indentation variance automatically:
 
 ## Packages
 
-| Package                                                | Description                                             |
-| ------------------------------------------------------ | ------------------------------------------------------- |
-| **[@oh-my-pi/pi-agent-core](packages/agent)**          | Agent runtime with tool calling and state management    |
-| **[@oh-my-pi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI                            |
-| **[@oh-my-pi/pi-git-tool](packages/git-tool)**         | Structured Git tool with safety guards and typed output |
-| **[@oh-my-pi/pi-tui](packages/tui)**                   | Terminal UI library with differential rendering         |
+| Package                                                | Description                                                                   |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **[@oh-my-pi/pi-ai](packages/ai)**                     | Multi-provider LLM client (Anthropic, OpenAI, Gemini, Cursor, Codex, Copilot) |
+| **[@oh-my-pi/pi-agent-core](packages/agent)**          | Agent runtime with tool calling and state management                          |
+| **[@oh-my-pi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI                                                  |
+| **[@oh-my-pi/pi-git-tool](packages/git-tool)**         | Structured Git tool with safety guards and typed output                       |
+| **[@oh-my-pi/pi-tui](packages/tui)**                   | Terminal UI library with differential rendering                               |
 
 ---
 
