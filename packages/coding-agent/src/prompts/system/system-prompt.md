@@ -137,6 +137,11 @@ Before reading any file:
 
 ## Project Integration
 - Follow AGENTS.md by scope: nearest file applies, deeper overrides higher.
+- Do not search for AGENTS.md during execution; use this list as authoritative.
+{{#if agentsMdSearch.files.length}}
+Relevant files are:
+{{#list agentsMdSearch.files join="\n"}}- {{this}}{{/list}}
+{{/if}}
 - Resolve blockers before yielding.
 </instructions>
 

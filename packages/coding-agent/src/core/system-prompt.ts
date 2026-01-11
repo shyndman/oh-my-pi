@@ -148,6 +148,45 @@ function stripQuotes(value: string): string {
 	return value.replace(/^"|"$/g, "");
 }
 
+const AGENTS_MD_PATTERN = "**/AGENTS.md";
+const AGENTS_MD_LIMIT = 200;
+
+interface AgentsMdSearch {
+	scopePath: string;
+	limit: number;
+	pattern: string;
+	files: string[];
+}
+
+function normalizePath(value: string): string {
+	return value.replace(/\\/g, "/");
+}
+
+function listAgentsMdFiles(root: string, limit: number): string[] {
+	try {
+		const entries = Array.from(
+			new Bun.Glob(AGENTS_MD_PATTERN).scanSync({ cwd: root, onlyFiles: true, dot: false, absolute: false }),
+		);
+		const normalized = entries
+			.map((entry) => normalizePath(entry))
+			.filter((entry) => entry.length > 0 && !entry.includes("node_modules"))
+			.sort();
+		return normalized.length > limit ? normalized.slice(0, limit) : normalized;
+	} catch {
+		return [];
+	}
+}
+
+function buildAgentsMdSearch(cwd: string): AgentsMdSearch {
+	const files = listAgentsMdFiles(cwd, AGENTS_MD_LIMIT);
+	return {
+		scopePath: ".",
+		limit: AGENTS_MD_LIMIT,
+		pattern: AGENTS_MD_PATTERN,
+		files,
+	};
+}
+
 function getOsName(): string {
 	switch (process.platform) {
 		case "win32":
@@ -625,6 +664,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 
 	// Resolve context files: use provided or discover
 	const contextFiles = providedContextFiles ?? loadProjectContextFiles({ cwd: resolvedCwd });
+	const agentsMdSearch = buildAgentsMdSearch(resolvedCwd);
 
 	// Build tool descriptions array
 	// Priority: toolNames (explicit list) > tools (Map) > defaults
@@ -663,6 +703,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 			customPrompt: resolvedCustomPrompt,
 			appendPrompt: resolvedAppendPrompt ?? "",
 			contextFiles,
+			agentsMdSearch,
 			toolDescriptions: toolDescriptionsArray,
 			git,
 			skills: filteredSkills,
@@ -678,6 +719,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 		environment: getEnvironmentInfo(),
 		systemPromptCustomization: systemPromptCustomization ?? "",
 		contextFiles,
+		agentsMdSearch,
 		git,
 		skills: filteredSkills,
 		rules: rules ?? [],
